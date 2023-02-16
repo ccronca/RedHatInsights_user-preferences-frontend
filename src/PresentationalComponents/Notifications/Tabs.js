@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import { useFormApi } from '@data-driven-forms/react-form-renderer';
 import { Text, Title } from '@patternfly/react-core';
 import { useHistory } from 'react-router-dom';
+import { useFormState } from 'react-final-form';
 import { getNavFromURL, setNavToURL } from './urlSync';
 import TabsMenu from './TabsMenu';
 import config from '../../config/config.json';
@@ -26,18 +27,30 @@ const FormTabs = ({ fields, titleRef }) => {
 
   const [search, setSearch] = useState('');
   const [filteredFields, setFilteredFields] = useState(fields);
+  const { pristine, submitSucceeded, dirtyFieldsSinceLastSubmit } =
+    useFormState();
 
   const handleResize = () => {
     const container = document.getElementById('notifications-container');
     const gridElement = document.getElementById('notifications-grid');
     const menu = document.getElementById('notifications-menu-content');
-    gridElement.style.height = `${container.getBoundingClientRect().height}px`;
-    menu.style.maxHeight = `${
-      container.getBoundingClientRect().height -
-      titleRef.current.getBoundingClientRect().height -
-      searchRef.current.getBoundingClientRect().height -
-      1
-    }px`;
+    if (menu?.style && gridElement?.style) {
+      const buttonsHeight =
+        document
+          .getElementById('user-pref__form-buttons')
+          ?.getBoundingClientRect()?.height || 0;
+      gridElement.style.height = `${
+        container.getBoundingClientRect().height - buttonsHeight
+      }px`;
+      const menuMaxHeight =
+        container.getBoundingClientRect().height -
+        titleRef.current.getBoundingClientRect().height -
+        searchRef.current.getBoundingClientRect().height -
+        (menuMaxHeight < menu.scrollHeight ? buttonsHeight : 0) -
+        1;
+      menu.style.maxHeight = `${menuMaxHeight}px`;
+      menu.style.height = `${menuMaxHeight - buttonsHeight}px`;
+    }
   };
 
   useEffect(() => {
@@ -73,6 +86,10 @@ const FormTabs = ({ fields, titleRef }) => {
     );
     setFilteredFields(filtered);
   }, [search]);
+
+  useEffect(() => {
+    handleResize();
+  }, [pristine, submitSucceeded, dirtyFieldsSinceLastSubmit]);
 
   return (
     <React.Fragment>
