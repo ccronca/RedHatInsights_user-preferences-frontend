@@ -1,12 +1,17 @@
 import React, { Fragment, useEffect } from 'react';
 import { Routes } from './Routes';
 import NotificationsPortal from '@redhat-cloud-services/frontend-components-notifications/NotificationPortal';
+import { useChrome } from '@redhat-cloud-services/frontend-components/useChrome';
 import './App.scss';
 
 const App = (props) => {
+  const { auth, updateDocumentTitle } = useChrome();
+
+  updateDocumentTitle?.('User Preferences');
+
   useEffect(() => {
     (async () => {
-      const user = await insights.chrome.auth.getUser();
+      const user = await auth.getUser();
       if (!user) {
         location.href = './';
       }
