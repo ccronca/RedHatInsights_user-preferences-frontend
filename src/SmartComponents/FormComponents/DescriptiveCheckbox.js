@@ -1,28 +1,22 @@
 import React from 'react';
 import { Checkbox } from '@patternfly/react-core';
-import classNames from 'classnames';
 import PropTypes from 'prop-types';
-import useFormApi from '@data-driven-forms/react-form-renderer/use-form-api';
 import useFieldApi from '@data-driven-forms/react-form-renderer/use-field-api';
+import useFormApi from '@data-driven-forms/react-form-renderer/use-form-api';
 import './descriptiveCheckbox.scss';
 import {
   ExclamationTriangleIcon,
   InfoCircleIcon,
 } from '@patternfly/react-icons';
 
-// eslint-disable-next-line no-unused-vars
 const DescriptiveCheckbox = (props) => {
   const {
-    group,
-    section,
     label,
-    beforeOnChange,
     title,
     description,
-    isDanger,
-    isGlobal,
     checkedWarning,
     infoMessage,
+    afterChange,
     input: { onChange, checked, ...input },
   } = useFieldApi({
     ...props,
@@ -36,27 +30,12 @@ const DescriptiveCheckbox = (props) => {
       isChecked={checked}
       id={`descriptive-checkbox-${input.name}`}
       onChange={(checked, event, ...rest) => {
-        beforeOnChange(
-          isGlobal,
-          checked,
-          formOptions,
-          group,
-          section,
-          props.name
-        );
         onChange(checked, event, ...rest);
+        afterChange?.(formOptions, checked);
       }}
       data-type="descriptive-checkbox"
       className="pref-c-descriptive-checkbox"
-      label={
-        <span
-          className={classNames('pref-c-checkbox-label', {
-            'pref-c-checkbox-label-error': isDanger || isGlobal,
-          })}
-        >
-          {label || title}
-        </span>
-      }
+      label={label || title}
       description={
         <div>
           {description && (
@@ -89,14 +68,12 @@ DescriptiveCheckbox.propTypes = {
   label: PropTypes.string,
   title: PropTypes.string,
   description: PropTypes.string,
-  isDanger: PropTypes.bool,
-  isGlobal: PropTypes.bool,
+  afterChange: PropTypes.func,
 };
 
 DescriptiveCheckbox.defaultProps = {
   name: '',
   label: '',
-  isDanger: false,
 };
 
 export default DescriptiveCheckbox;
