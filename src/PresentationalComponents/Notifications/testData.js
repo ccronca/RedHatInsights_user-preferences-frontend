@@ -67,7 +67,7 @@ export const userPrefEmptyInitialState = {
 export const calculateEmailConfigResponse = {
   advisor: {
     isVisible: {},
-    url: '/my-notification-preferences/',
+    url: '/user-preferences/',
     apiName: 'insights',
     bundle: 'rhel',
     title: 'Advisor',
