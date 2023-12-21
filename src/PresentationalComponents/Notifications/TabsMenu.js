@@ -17,7 +17,7 @@ import {
   Title,
 } from '@patternfly/react-core';
 import { SearchIcon } from '@patternfly/react-icons';
-import { useHistory } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import PropTypes from 'prop-types';
 import { getNavFromURL } from './urlSync';
 
@@ -35,11 +35,12 @@ const renderEmptyState = (setSearch) => (
 );
 
 const TabsMenu = ({ searchRef, search, setSearch, fields, onClick }) => {
-  const history = useHistory();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const { bundle, app } = useMemo(
-    () => getNavFromURL(history, fields, {}),
-    [history?.location.search]
+    () => getNavFromURL(location, navigate, fields, {}),
+    [location.search]
   );
 
   return (
@@ -57,23 +58,27 @@ const TabsMenu = ({ searchRef, search, setSearch, fields, onClick }) => {
       <Divider />
       <MenuContent id="notifications-menu-content">
         {fields.some((bundle) => bundle.fields.length > 0)
-          ? fields.map(({ fields, title, name: bundleName }) =>
+          ? fields.map(({ fields, title: bundleLabel, name: bundleName }) =>
               fields.length > 0 ? (
                 <MenuGroup
-                  label={title}
+                  label={bundleLabel}
                   className="pf-u-px-sm"
                   key={`menu-group-${bundleName}`}
                 >
                   <MenuList>
-                    {fields.map(({ label, name: sectionName }) => (
-                      <MenuItem
-                        onClick={(e) => onClick(e, bundleName, sectionName)}
-                        key={`menu-item-${bundleName}-${sectionName}`}
-                        isFocused={bundle === bundleName && app === sectionName}
-                      >
-                        {label}
-                      </MenuItem>
-                    ))}
+                    {fields.map(
+                      ({ label: sectionLabel, name: sectionName }) => (
+                        <MenuItem
+                          onClick={(e) => onClick(e, bundleName, sectionName)}
+                          key={`menu-item-${bundleName}-${sectionName}`}
+                          isFocused={
+                            bundle === bundleName && app === sectionName
+                          }
+                        >
+                          {sectionLabel}
+                        </MenuItem>
+                      )
+                    )}
                   </MenuList>
                 </MenuGroup>
               ) : null

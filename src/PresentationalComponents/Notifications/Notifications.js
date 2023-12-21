@@ -1,124 +1,93 @@
 import React, { useEffect, useRef, useState } from 'react';
 import omit from 'lodash/omit';
+import useChrome from '@redhat-cloud-services/frontend-components/useChrome';
 import { FormRenderer } from '@data-driven-forms/react-form-renderer';
 import { componentMapper } from '@data-driven-forms/pf4-component-mapper';
-import { Text } from '@patternfly/react-core';
+import { Bullseye, Spinner, Text } from '@patternfly/react-core';
 import { PageHeaderTitle } from '@redhat-cloud-services/frontend-components/PageHeader';
 import { addNotification } from '@redhat-cloud-services/frontend-components-notifications/redux';
+import { ScalprumComponent } from '@scalprum/react-core';
 import { useDispatch, useSelector } from 'react-redux';
+import { useStore } from 'react-redux';
 import {
-  getNotificationSchemas,
+  getNotificationsSchema,
   saveNotificationValues,
 } from '../../redux/actions/notifications-actions';
 import { saveEmailValues } from '../../redux/actions/email-actions';
-import { getApplicationSchema } from '../../api';
+import { calculateEmailConfig } from '../../Utilities/functions';
 import {
-  calculateEmailConfig,
-  notificationConfigForBundle,
-} from '../../Utilities/functions';
-import {
+  BULK_SELECT_BUTTON,
+  BulkSelectButton,
   DATA_LIST,
   DESCRIPTIVE_CHECKBOX,
   DataListLayout,
   DescriptiveCheckbox,
+  FORM_TABS,
+  INPUT_GROUP,
+  InputGroup,
   LOADER,
   Loader,
+  TAB_GROUP,
 } from '../../SmartComponents/FormComponents';
 import config from '../../config/config.json';
 import FormTabs from './Tabs';
 import FormTabGroup from './TabGroup';
 import { prepareFields } from './utils';
-import { UNSUBSCRIBE_ALL } from '../../Utilities/constants';
 import FormTemplate from './NotificationTemplate';
 import './notifications.scss';
-import { useChrome } from '@redhat-cloud-services/frontend-components/useChrome';
 
 const Notifications = () => {
   const { auth } = useChrome();
   const dispatch = useDispatch();
   const titleRef = useRef(null);
-  const [isLoading, setLoading] = useState(false);
   const [emailConfig, setEmailConfig] = useState({});
+  const store = useStore();
 
   const emailPref = useSelector(({ emailReducer }) => emailReducer);
-  const { bundles: notifPref } = useSelector(({ notificationsReducer }) => ({
-    bundles: {},
-    ...notificationsReducer,
-  }));
+  const { bundles: notifPref, loaded } = useSelector(
+    ({ notificationsReducer }) => ({
+      ...notificationsReducer,
+      bundles: Object.entries(notificationsReducer?.bundles || {})?.reduce(
+        (acc, [key, value]) => ({
+          ...acc,
+          ...(config['notification-preference'].includes(key)
+            ? { [key]: value }
+            : {}),
+        }),
+        {}
+      ),
+    })
+  );
 
   useEffect(() => {
-    setLoading(true);
     (async () => {
       await auth.getUser();
-      setEmailConfig(await calculateEmailConfig(config, dispatch));
-      const promises = Object.keys(config['notification-preference']).map(
-        (bundleName) =>
-          getApplicationSchema(
-            notificationConfigForBundle(bundleName)?.application,
-            undefined,
-            notificationConfigForBundle(bundleName)?.resourceType
-          ).then((data) => ({
-            data,
-            bundleName,
-          }))
-      );
-      Promise.all(promises).then((values) => {
-        const newValues = values.reduce(
-          (acc, { data, bundleName }) => ({
-            ...acc,
-            [bundleName]: data?.fields[0],
-          }),
-          {}
-        );
-        dispatch(getNotificationSchemas(newValues));
-        setLoading(false);
-      });
+      setEmailConfig(calculateEmailConfig(config, dispatch));
+      dispatch(getNotificationsSchema());
     })();
   }, []);
 
   const saveValues = (values, formApi) => {
-    const notifToSubmit = Object.entries(notifPref).reduce((acc, curr) => {
-      const temp = curr[1].sections
-        .filter((item) =>
-          Object.entries(formApi.getState().dirtyFields).some(
-            ([key, value]) =>
-              key.includes(curr[0]) &&
-              key.includes(item.name) &&
-              key.includes('notifications') &&
-              value
-          )
-        )
-        .map((item) => item.name);
-      const tempToSubmit = [...new Set([...(acc?.[curr[0]] || []), ...temp])];
-      return {
-        ...acc,
-        ...(tempToSubmit.length > 0 ? { [curr[0]]: tempToSubmit } : {}),
-      };
-    }, {});
-    const promises = Object.keys(notifToSubmit).map((bundleName) =>
-      dispatch(
-        saveNotificationValues({
-          bundleName,
-          values: {
-            bundles: {
-              [bundleName]: {
-                applications: Object.entries(
-                  values.bundles[bundleName].applications
-                ).reduce(
-                  (acc, [key, value]) => ({
-                    ...acc,
-                    [key]: {
-                      notifications: omit(value.notifications, UNSUBSCRIBE_ALL),
-                    },
-                  }),
-                  {}
-                ),
-              },
-            },
+    const notificationValues = {
+      bundles: Object.entries(values.bundles).reduce(
+        (acc, [bundleName, bundleData]) => ({
+          ...acc,
+          [bundleName]: {
+            applications: Object.entries(bundleData.applications).reduce(
+              (acc, [appName, appData]) => ({
+                ...acc,
+                [appName]: {
+                  eventTypes: omit(appData.eventTypes, BULK_SELECT_BUTTON),
+                },
+              }),
+              {}
+            ),
           },
-        })
-      )
-    );
+        }),
+        {}
+      ),
+    };
+    const promises = [dispatch(saveNotificationValues(notificationValues))];
     // temporary submitting of RHEL Advisor email pref.
     if (formApi.getState().dirtyFields['is_subscribed']) {
       const { url, apiName } = emailConfig['advisor'];
@@ -130,7 +99,6 @@ const Notifications = () => {
       });
       promises.push(dispatch(action));
     }
-    formApi.initialize(values);
     Promise.all(promises)
       .then(() => {
         dispatch(
@@ -152,7 +120,7 @@ const Notifications = () => {
       });
   };
 
-  return !isLoading ? (
+  return loaded && Object.values(emailPref).every((value) => value.loaded) ? (
     <div id="notifications-container" className="pref-notifications--container">
       <div className="pref-notifications--wrapper">
         <div id="notifications-grid" className="pref-notifications--grid">
@@ -166,6 +134,11 @@ const Notifications = () => {
               notifications. Your Organization Administrator has configured
               which notifications you can or can not receive in their{' '}
               <a href={`/settings/notifications`}>Settings</a>.
+              <ScalprumComponent
+                module="./ConnectedTimeConfig"
+                scope="notifications"
+                store={store}
+              />
             </Text>
           </div>
 
@@ -173,18 +146,21 @@ const Notifications = () => {
             componentMapper={{
               ...componentMapper,
               [DESCRIPTIVE_CHECKBOX]: DescriptiveCheckbox,
+              [BULK_SELECT_BUTTON]: BulkSelectButton,
               [LOADER]: Loader,
               [DATA_LIST]: DataListLayout,
-              tabs: FormTabs,
-              tabGroup: FormTabGroup,
+              [INPUT_GROUP]: InputGroup,
+              [FORM_TABS]: FormTabs,
+              [TAB_GROUP]: FormTabGroup,
             }}
             FormTemplate={FormTemplate}
             schema={{
               fields: [
                 {
-                  component: 'tabs',
+                  component: FORM_TABS,
                   name: 'notifTabs',
                   titleRef,
+                  bundles: notifPref,
                   fields: prepareFields(notifPref, emailPref, emailConfig),
                 },
               ],
@@ -194,7 +170,11 @@ const Notifications = () => {
         </div>
       </div>
     </div>
-  ) : null;
+  ) : (
+    <Bullseye>
+      <Spinner />
+    </Bullseye>
+  );
 };
 
 export default Notifications;

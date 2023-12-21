@@ -1,4 +1,14 @@
-import React from 'react';
+/* eslint-disable react/prop-types */
+import * as API from '../../api';
+import * as EmailActions from '../../redux/actions/email-actions';
+import * as NotificationsActions from '../../redux/actions/notifications-actions';
+import * as functions from '../../Utilities/functions';
+
+import {
+  GET_NOTIFICATIONS_SCHEMA,
+  SAVE_EMAIL_SCHEMA,
+  SAVE_NOTIFICATION_SCHEMA,
+} from '../../redux/action-types';
 import {
   act,
   fireEvent,
@@ -8,28 +18,50 @@ import {
   queryByText,
   render,
 } from '@testing-library/react';
-import Notifications from './Notifications';
-import configureStore from 'redux-mock-store';
-import promiseMiddleware from 'redux-promise-middleware';
-import * as API from '../../api';
-import * as NotificationsActions from '../../redux/actions/notifications-actions';
-import * as EmailActions from '../../redux/actions/email-actions';
-import { Provider } from 'react-redux';
-import {
-  GET_NOTIFICATION_SCHEMAS,
-  SAVE_EMAIL_SCHEMA,
-  SAVE_NOTIFICATION_SCHEMA,
-} from '../../redux/action-types';
-import * as functions from '../../Utilities/functions';
 import { calculateEmailConfigResponse, userPrefInitialState } from './testData';
 
+import { MemoryRouter } from 'react-router-dom';
+import Notifications from './Notifications';
+import { Provider } from 'react-redux';
+import React from 'react';
+import { ScalprumProvider } from '@scalprum/react-core';
+import configureStore from 'redux-mock-store';
+import promiseMiddleware from 'redux-promise-middleware';
+
+const mockedNavigate = jest.fn();
+const mockedLocation = jest.fn(() => ({}));
+
 jest.mock('react-router-dom', () => ({
-  useHistory: () => ({
-    push: jest.fn(),
-    replace: jest.fn(),
-    location: {},
-  }),
+  ...jest.requireActual('react-router-dom'),
+  useNavigate: () => mockedNavigate,
+  useLocation: () => mockedLocation,
 }));
+
+jest.mock('@redhat-cloud-services/frontend-components/useChrome', () => {
+  return () => ({
+    chromeHistory: {
+      push: jest.fn(),
+      block: jest.fn(() => jest.fn()),
+    },
+    auth: { getUser: () => Promise.resolve() },
+  });
+});
+
+const NotificationsWrapper = ({ store, children }) => (
+  <ScalprumProvider
+    api={{
+      chrome: {
+        getEnvironment: () => '',
+        isProd: () => false,
+        isBeta: () => false,
+      },
+    }}
+  >
+    <Provider store={store}>
+      <MemoryRouter>{children}</MemoryRouter>
+    </Provider>
+  </ScalprumProvider>
+);
 
 describe('Notifications tests', () => {
   const middlewares = [promiseMiddleware];
@@ -38,9 +70,9 @@ describe('Notifications tests', () => {
 
   const calculateEmailConfig = jest.spyOn(functions, 'calculateEmailConfig');
   const getApplicationSchema = jest.spyOn(API, 'getApplicationSchema');
-  const getNotificationSchemasSpy = jest.spyOn(
+  const getNotificationsSchemaSpy = jest.spyOn(
     NotificationsActions,
-    'getNotificationSchemas'
+    'getNotificationsSchema'
   );
   const saveNotificationValues = jest.spyOn(
     NotificationsActions,
@@ -59,28 +91,27 @@ describe('Notifications tests', () => {
   afterEach(() => {
     calculateEmailConfig.mockReset();
     getApplicationSchema.mockReset();
-    getNotificationSchemasSpy.mockReset();
+    getNotificationsSchemaSpy.mockReset();
     saveNotificationValues.mockReset();
     saveEmailValues.mockReset();
+    mockedNavigate.mockReset();
+    mockedLocation.mockReset();
   });
 
   it('should render correctly', async () => {
     getApplicationSchema.mockImplementation(() => emptyResolve);
-    calculateEmailConfig.mockImplementation(() =>
-      Promise.resolve(calculateEmailConfigResponse)
-    );
-    getNotificationSchemasSpy.mockImplementation(() => ({
-      type: GET_NOTIFICATION_SCHEMAS,
+    getNotificationsSchemaSpy.mockImplementation(() => ({
+      type: GET_NOTIFICATIONS_SCHEMA,
       payload: Promise.resolve({
-        fields: [],
+        bundles: {},
       }),
     }));
     let wrapper;
     await act(async () => {
       wrapper = render(
-        <Provider store={mockStore(initialState)}>
+        <NotificationsWrapper store={mockStore(initialState)}>
           <Notifications />
-        </Provider>
+        </NotificationsWrapper>
       );
     });
     expect(wrapper.container).toMatchSnapshot();
@@ -88,13 +119,10 @@ describe('Notifications tests', () => {
 
   it('should render empty state on filter', async () => {
     getApplicationSchema.mockImplementation(() => emptyResolve);
-    calculateEmailConfig.mockImplementation(() =>
-      Promise.resolve(calculateEmailConfigResponse)
-    );
-    getNotificationSchemasSpy.mockImplementation(() => ({
-      type: GET_NOTIFICATION_SCHEMAS,
+    getNotificationsSchemaSpy.mockImplementation(() => ({
+      type: GET_NOTIFICATIONS_SCHEMA,
       payload: Promise.resolve({
-        fields: [],
+        bundles: {},
       }),
     }));
     let wrapper;
@@ -120,13 +148,11 @@ describe('Notifications tests', () => {
 
   it('should submit correctly', async () => {
     getApplicationSchema.mockImplementation(() => emptyResolve);
-    calculateEmailConfig.mockImplementation(() =>
-      Promise.resolve(calculateEmailConfigResponse)
-    );
-    getNotificationSchemasSpy.mockImplementation(() => ({
-      type: GET_NOTIFICATION_SCHEMAS,
+    calculateEmailConfig.mockImplementation(() => calculateEmailConfigResponse);
+    getNotificationsSchemaSpy.mockImplementation(() => ({
+      type: GET_NOTIFICATIONS_SCHEMA,
       payload: Promise.resolve({
-        fields: [],
+        bundles: {},
       }),
     }));
     saveNotificationValues.mockImplementation(() => ({
@@ -149,20 +175,19 @@ describe('Notifications tests', () => {
     fireEvent.click(getAllByRole(wrapper.container, 'checkbox').at(0));
     fireEvent.click(getAllByRole(wrapper.container, 'checkbox').at(1));
     expect(getByText(wrapper.container, 'Save')).toBeEnabled();
+    fireEvent.click(getByText(wrapper.container, 'Cancel'));
+    expect(queryByText(wrapper.container, 'Save')).toEqual(null);
+    fireEvent.click(getAllByRole(wrapper.container, 'checkbox').at(0));
+    fireEvent.click(getAllByRole(wrapper.container, 'checkbox').at(1));
     fireEvent.click(getByText(wrapper.container, 'Save'));
     expect(queryByText(wrapper.container, 'Save')).toEqual(null);
     expect(saveNotificationValues).toHaveBeenCalledTimes(1);
     expect(saveNotificationValues).toHaveBeenCalledWith({
-      bundleName: 'console',
-      values: {
-        bundles: {
-          console: {
-            applications: {
-              sources: {
-                notifications: {
-                  INSTANT: false,
-                },
-              },
+      bundles: {
+        console: {
+          applications: {
+            sources: {
+              eventTypes: {},
             },
           },
         },
@@ -173,7 +198,7 @@ describe('Notifications tests', () => {
       apiName: 'insights',
       application: 'advisor',
       url: '/user-preferences/',
-      values: { is_subscribed: false },
+      values: { is_subscribed: true },
     });
   });
 });
