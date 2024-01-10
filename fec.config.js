@@ -1,3 +1,5 @@
+const path = require('path');
+
 module.exports = {
   appUrl: ['/user-preferences/notifications'],
   debug: true,
@@ -13,9 +15,8 @@ module.exports = {
    */
   plugins: [],
   _unstableHotReload: process.env.HOT === 'true',
-  routes: {
-    '/api/chrome-service/v1/static': {
-      host: 'http://localhost:8000',
-    },
+  moduleFederation: {
+    exclude: ['react-router-dom'],
+    shared: [{ 'react-router-dom': { singleton: true, version: '*' } }],
   },
 };
